@@ -8,6 +8,7 @@ from sklearn.model_selection import train_test_split
 from transformers import Trainer, TrainingArguments
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 
+import torch 
 from torch.utils.data import Dataset, DataLoader 
 from torch.utils.tensorboard import SummaryWriter 
 from datasets import load_metric 
@@ -20,9 +21,15 @@ print(original_dataset_path)
 
 base_model_path = os.path.join(root_dir, 'models', 'SciFive-large-Pubmed_PMC')
 
+print(torch.cuda.is_available())  # Should print: True
+print(torch.cuda.get_device_name(0))  # Prints the name of your GPU
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 # Load SciFive
-tokenizer = AutoTokenizer.from_pretrained(base_model_path)
+tokenizer = AutoTokenizer.from_pretrained(base_model_path, use_fast=True)
 model = AutoModelForSeq2SeqLM.from_pretrained(base_model_path)
+model = model.to(device)
 
 sanitized_dataset_path = os.path.join(root_dir, 'data', 'sanitized_data.csv')
 sanitized_df = pd.read_csv(sanitized_dataset_path)
@@ -124,8 +131,11 @@ def compute_metrics(eval_pred):
 training_args = TrainingArguments(
     output_dir=results_path,
     num_train_epochs=3,
-    per_device_train_batch_size=2,
-    per_device_eval_batch_size=2,
+    per_device_train_batch_size=1,
+    per_device_eval_batch_size=1,
+    gradient_accumulation_steps=4,
+    fp16=True,
+    gradient_checkpointing=True,
     warmup_steps=10,
     weight_decay=0.01,
     logging_dir=logs_path,
