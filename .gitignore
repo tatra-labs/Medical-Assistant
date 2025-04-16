@@ -172,3 +172,11 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Project Environment 
+.venv/
+.vscode/
+
+# Training 
+models/
+*/checkpoints/
