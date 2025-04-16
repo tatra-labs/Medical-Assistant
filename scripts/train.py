@@ -5,13 +5,20 @@ import pandas as pd
 import numpy as np 
 
 from sklearn.model_selection import train_test_split
-from transformers import Trainer, TrainingArguments
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
-
 import torch 
 from torch.utils.data import Dataset, DataLoader 
 from torch.utils.tensorboard import SummaryWriter 
-from datasets import load_metric 
+
+from transformers import (
+    Trainer, 
+    TrainingArguments, 
+    DataCollatorForSeq2Seq, 
+    AutoConfig, 
+    AutoTokenizer, 
+    AutoModelForSeq2SeqLM,
+    TrainerCallback
+)
+from datasets import Dataset, load_metric 
 
 root_dir = os.path.abspath(os.path.join(os.getcwd(), '..'))
 print(root_dir)
@@ -19,63 +26,86 @@ print(root_dir)
 original_dataset_path = os.path.join(root_dir, 'data', 'mle_screening_dataset.csv')
 print(original_dataset_path)
 
-base_model_path = os.path.join(root_dir, 'models', 'SciFive-large-Pubmed_PMC')
+base_model_path = 'razent/SciFive-large-Pubmed_PMC'
 
-print(torch.cuda.is_available())  # Should print: True
-print(torch.cuda.get_device_name(0))  # Prints the name of your GPU
+# print(torch.cuda.is_available())  # Should print: True
+# print(torch.cuda.get_device_name(0))  # Prints the name of your GPU
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Load SciFive
+config = AutoConfig.from_pretrained(base_model_path)
 tokenizer = AutoTokenizer.from_pretrained(base_model_path, use_fast=True)
 model = AutoModelForSeq2SeqLM.from_pretrained(base_model_path)
 model = model.to(device)
 
+model.gradient_checkpointing_enable()
+
 sanitized_dataset_path = os.path.join(root_dir, 'data', 'sanitized_data.csv')
 sanitized_df = pd.read_csv(sanitized_dataset_path)
-
-class MedQuQADataset(Dataset):
-    def __init__(self, df, tokenizer, max_length=1024):
-        self.df = df 
-        self.tokenizer = tokenizer 
-        self.max_length = max_length 
-        
-    def __getitem__(self, idx):
-        question, answer = self.df.iloc[idx]['prompt'], self.df.iloc[idx]['response']
-        inputs = self.tokenizer(
-            f"question: {question}",
-            max_length=self.max_length,
-            padding='max_length',
-            truncation=True,
-            return_tensors="pt"
-        )
-        labels = self.tokenizer(
-            answer,
-            max_length=self.max_length,
-            padding='max_length',
-            truncation=True,
-            return_tensors="pt"
-        )
-        
-        return {
-            'input_ids': inputs['input_ids'].squeeze(),
-            'attention_mask': inputs['attention_mask'].squeeze(),
-            'labels': labels['input_ids'].squeeze()
-        }
-    
-    def __len__(self):
-        return len(self.df)
-    
+sanitized_df = sanitized_df[['prompt', 'response']]
+sanitized_df = sanitized_df.rename(columns={'prompt': 'question', 'response': 'answer'})
 
 results_path = os.path.join(root_dir, 'results')
 logs_path = os.path.join(root_dir, 'logs')
 
 train_val_df, test_df = train_test_split(sanitized_df, test_size=0.2, random_state=42)
-train_df, val_df = train_test_split(train_val_df, test_size=0.2, random_state=42)
+train_df, val_df = train_test_split(train_val_df, test_size=0.025, random_state=42)
 
-train_dataset = MedQuQADataset(train_df, tokenizer)
-val_dataset = MedQuQADataset(val_df, tokenizer)
-test_dataset = MedQuQADataset(test_df, tokenizer)
+train_dataset = Dataset.from_pandas(train_df)
+val_dataset = Dataset.from_pandas(val_df)
+test_dataset = Dataset.from_pandas(test_df)
+
+max_length = config.n_positions 
+prefix = "question: "
+
+def preprocess(example):
+    questions = [prefix + q for q in example["question"]]
+    inputs = tokenizer(
+        questions,
+        max_length=max_length,
+        padding="max_length",
+        truncation=True,
+        return_tensors="pt",
+    )
+    targets = tokenizer(
+        example["answer"],
+        max_length=max_length,
+        padding="max_length",
+        truncation=True,
+        return_tensors="pt",
+    )
+    
+    example['input_ids'] = inputs.input_ids
+    example['attention_mask'] = inputs.attention_mask
+    example['labels'] = targets.input_ids
+    
+    return example
+
+train_dataset = train_dataset.map(
+    preprocess,
+    batched=True,
+    remove_columns=['question', 'answer']
+)
+
+val_dataset = val_dataset.map(
+    preprocess,
+    batched=True,
+    remove_columns=['question', 'answer']
+)
+
+test_dataset = test_dataset.map(
+    preprocess,
+    batched=True,
+    remove_columns=['question', 'answer']
+)
+
+data_collator = DataCollatorForSeq2Seq(
+    tokenizer,
+    model=model,
+    label_pad_token_id=-100,
+    pad_to_multiple_of=8,
+)
 
 # Metrics 
 f1_metric = load_metric("f1", trust_remote_code=True)
@@ -128,25 +158,29 @@ def compute_metrics(eval_pred):
         "rougeL": rouge_result["rougeL"].mid.fmeasure
     }
     
+class ClearMemoryCallback(TrainerCallback):
+    def on_evaluate(self, args, state, control, **kwargs):
+        torch.cuda.empty_cache()
+
 training_args = TrainingArguments(
     output_dir=results_path,
-    num_train_epochs=3,
-    per_device_train_batch_size=1,
+    num_train_epochs=5,
+    per_device_train_batch_size=2,
     per_device_eval_batch_size=1,
-    gradient_accumulation_steps=4,
-    fp16=True,
-    gradient_checkpointing=True,
+    gradient_accumulation_steps=8,
+    eval_accumulation_steps=50,
+    bf16=True,
     warmup_steps=10,
     weight_decay=0.01,
     logging_dir=logs_path,
-    logging_steps=10,  # Log every 10 steps
+    logging_steps=10, 
     evaluation_strategy="steps",
-    eval_steps=10,  # Evaluate every 10 steps
+    eval_steps=100,
     save_strategy="steps",
-    save_steps=10,  # Checkpoint every 10 steps
-    load_best_model_at_end=True,
+    save_steps=100, 
     metric_for_best_model="eval_loss",
     greater_is_better=False,
+    save_total_limit=30,
 )
 
 trainer = Trainer(
@@ -154,11 +188,21 @@ trainer = Trainer(
     args=training_args,
     train_dataset=train_dataset,
     eval_dataset=val_dataset,
+    data_collator=data_collator,
+    tokenizer=tokenizer,
     compute_metrics=compute_metrics,
+    callbacks=[ClearMemoryCallback()],
 )
 
 trainer.train()
+trainer.save_model(results_path)
 
-test_results = trainer.evaluate(test_dataset) 
+def cpu_evaluate(trainer, dataset):
+    model.to("cpu")
+    torch.cuda.empty_cache()
+    results = trainer.evaluate(dataset)
+    model.to("cuda")
+    return results
 
+test_results = cpu_evaluate(trainer, test_dataset)
 print(test_results)
