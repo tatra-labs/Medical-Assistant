@@ -137,7 +137,6 @@ Provide a README file with a concise description of the approach used to tackle 
       per_device_eval_batch_size=1,
       gradient_accumulation_steps=8,
       eval_accumulation_steps=50,
-      bf16=True,
       warmup_steps=10,
       weight_decay=0.01,
       logging_dir=logs_path,
@@ -184,15 +183,21 @@ Provide a README file with a concise description of the approach used to tackle 
 ### Sample Interactions 
 
 **Input**: what are marine toxins?
+
 **Original Output (before fine-tuning)**: *toxins*
+
 **Output**: Marine toxins have multiple effects and may lead to different illnesses. They are toxins in marine fish and seafood. They have a variety of actions, from preventing the use of certain foods to preventing illnesses. These can include exposure to certain chemicals in seafood, such as benzene, acetaminophen, sulfadiazine, and toxin A. The major mechanism of action of marine toxins is unclear. However, the mechanisms by which they produce these harmful toxins differ between species. Their main purpose is to protect organisms from harmful levels. The health risks associated with exposure to marine toxicity can be prevented by consuming the essential oil. In fact, many parts of the food are not used for humans.
 
 **Input**: What is (are) Yellow Fever Vaccination ?
+
 **Original Output (before fine-tuning)**: *What are*
+
 **Current Output**: Yellow fever is a viral infection of the human immune system called YFV. Many people will not become infected until they've had a booster dose of vaccine, so they do not receive a boost dose. There are many ways to get Y FV vaccine. The main ways to protect yourself against yellow fever are through vaccination. Your child's vaccination schedule depends on your age and gender. The primary route of vaccination is through a health care provider, and you may receive booster doses when you have antibodies that are specific to that cause yellow fever. You should be at least six months after the booster. This includes an RDT, a short term for the second type of vaccine. If you are infed, you may develop yellow fever soon after receiving a relapse and get a severe illness called lymphocccancerous leuclear disease. Yellow fever causes high levels of antibodies in your body. A yellow fever vaccine is formulated by doctors who use the YCFD Network. The vaccine includes four types of yellow fever, two types of - Type 1 and type B, if you receive it from your physician. Vaccines, C, DTP, DPTs, and DPT.
 
 **Input**: Who is at risk for Parasites - Lice - Body Lice? ?
+
 **Original Output (before fine-tuning)**: *Patients with Neurological Disorders*
+
 **Output**: It has been shown that exposure to body lice can lead to many health problems including: Intestinal worms, like a larva in a lice-infected insect, is one way to transmit the infection. Insecticide-resistant Lice usually cannot spread into humans; however, a bite or an infection by a contaminated wound or hair can increase the risk of a person having a body lice infestation. If a mosquito bites a human, it could make people more susceptible to infections by contaminating food such as hot water, or smoke and/or chemical compounds. Some of the eggs are not visible to the skin. This means that the larvae is not present in the skin on the body. If an animal dies from an irashes of body lice, you may have skin infections with a mild sting.
 
 ### Evaluation 
