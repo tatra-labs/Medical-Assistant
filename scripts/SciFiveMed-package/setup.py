@@ -84,7 +84,7 @@ REQUIRED_PACKAGES = [
     'tokenizers==0.19.1',
     'torch==2.6.0',
     'tqdm==4.67.1',
-    'transformers==4.41.2',
+    'transformers==4.53.0',
     'triton==3.2.0',
     'typing_extensions==4.13.2',
     'tzdata==2025.2',
