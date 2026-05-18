@@ -234,9 +234,3 @@ https://drive.google.com/file/d/1-7AZbG137zpMNmX0jJwkGTxtptJBwytG/view?usp=drive
 
 **models**: 
 - base model(`SciFive-large-Pubmed_PMC`)
-
-**scripts**: 
-- *SciFiveMed-package* (trained on VertexAI) 
-- *train.py* (trained on GPU server, Google Cloud VM instance in my case)
-- *evaluate.py* (evaluate model performance in 4 metrics - EM, F1, BLEU, ROUGE) 
-- *inference.py* (predict using fine-tuned model)
